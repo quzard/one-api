@@ -12,7 +12,7 @@ import {
 } from 'semantic-ui-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { UserContext } from '../context/User';
-import { API, getLogo, showError, showSuccess } from '../helpers';
+import { API, getLogo, showError, showSuccess, showInfo } from '../helpers';
 
 const LoginForm = () => {
   const [inputs, setInputs] = useState({
@@ -76,7 +76,7 @@ const LoginForm = () => {
   async function handleSubmit(e) {
     setSubmitted(true);
     if (username && password) {
-      const res = await API.post('/api/user/login', {
+      const res = await API.post(`/api/user/login`, {
         username,
         password,
       });

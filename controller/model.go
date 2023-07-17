@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -53,6 +54,15 @@ func init() {
 	})
 	// https://platform.openai.com/docs/models/model-endpoint-compatibility
 	openAIModels = []OpenAIModels{
+		{
+			Id:         "dall-e",
+			Object:     "model",
+			Created:    1677649963,
+			OwnedBy:    "openai",
+			Permission: permission,
+			Root:       "dall-e",
+			Parent:     nil,
+		},
 		{
 			Id:         "gpt-3.5-turbo",
 			Object:     "model",
@@ -240,6 +250,24 @@ func init() {
 			OwnedBy:    "openai",
 			Permission: permission,
 			Root:       "code-davinci-edit-001",
+			Parent:     nil,
+		},
+		{
+			Id:         "ChatGLM",
+			Object:     "model",
+			Created:    1677649963,
+			OwnedBy:    "thudm",
+			Permission: permission,
+			Root:       "ChatGLM",
+			Parent:     nil,
+		},
+		{
+			Id:         "ChatGLM2",
+			Object:     "model",
+			Created:    1677649963,
+			OwnedBy:    "thudm",
+			Permission: permission,
+			Root:       "ChatGLM2",
 			Parent:     nil,
 		},
 	}

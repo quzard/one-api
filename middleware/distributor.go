@@ -2,12 +2,13 @@ package middleware
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"one-api/common"
 	"one-api/model"
 	"strconv"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ModelRequest struct {
@@ -75,6 +76,16 @@ func Distribute() func(c *gin.Context) {
 			}
 			if strings.HasPrefix(modelRequest.Model, "gpt-35-turbo") {
 				modelRequest.Model = strings.Replace(modelRequest.Model, "gpt-35-turbo", "gpt-3.5-turbo", 1)
+			}
+			if strings.HasSuffix(c.Request.URL.Path, "embeddings") {
+				if modelRequest.Model == "" {
+					modelRequest.Model = c.Param("model")
+				}
+			}
+			if strings.HasPrefix(c.Request.URL.Path, "/v1/images/generations") {
+				if modelRequest.Model == "" {
+					modelRequest.Model = "dall-e"
+				}
 			}
 			channel, err = model.CacheGetRandomSatisfiedChannel(userGroup, modelRequest.Model)
 			if err != nil {

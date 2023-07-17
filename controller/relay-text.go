@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
 	"one-api/common"
 	"one-api/model"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
@@ -30,6 +31,9 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 	}
 	if relayMode == RelayModeModerations && textRequest.Model == "" {
 		textRequest.Model = "text-moderation-latest"
+	}
+	if relayMode == RelayModeEmbeddings && textRequest.Model == "" {
+		textRequest.Model = c.Param("model")
 	}
 	// request validation
 	if textRequest.Model == "" {
@@ -226,8 +230,8 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 				return 0, nil, nil
 			}
 
-			if i := strings.Index(string(data), "\n\n"); i >= 0 {
-				return i + 2, data[0:i], nil
+			if i := strings.Index(string(data), "\n"); i >= 0 {
+				return i + 1, data[0:i], nil
 			}
 
 			if atEOF {
@@ -241,8 +245,7 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 		go func() {
 			for scanner.Scan() {
 				data := scanner.Text()
-				if len(data) < 6 { // must be something wrong!
-					common.SysError("invalid stream response: " + data)
+				if len(data) < 6 { // ignore blank line or wrong format
 					continue
 				}
 				dataChan <- data
@@ -285,6 +288,8 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 				if strings.HasPrefix(data, "data: [DONE]") {
 					data = data[:12]
 				}
+				// some implementations may add \r at the end of data
+				data = strings.TrimSuffix(data, "\r")
 				c.Render(-1, common.CustomEvent{Data: data})
 				return true
 			case <-stopChan:

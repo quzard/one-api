@@ -19,6 +19,7 @@ const (
 	APITypeClaude
 	APITypePaLM
 	APITypeBaidu
+	APITypeZhipu
 )
 
 func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
@@ -85,6 +86,8 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 		apiType = APITypeBaidu
 	} else if strings.HasPrefix(textRequest.Model, "PaLM") {
 		apiType = APITypePaLM
+	} else if strings.HasPrefix(textRequest.Model, "chatglm_") {
+		apiType = APITypeZhipu
 	}
 	baseURL := common.ChannelBaseURLs[channelType]
 	requestURL := c.Request.URL.String()
@@ -135,6 +138,12 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 		apiKey := c.Request.Header.Get("Authorization")
 		apiKey = strings.TrimPrefix(apiKey, "Bearer ")
 		fullRequestURL += "?key=" + apiKey
+	case APITypeZhipu:
+		method := "invoke"
+		if textRequest.Stream {
+			method = "sse-invoke"
+		}
+		fullRequestURL = fmt.Sprintf("https://open.bigmodel.cn/api/paas/v3/model-api/%s/%s", textRequest.Model, method)
 	}
 	var promptTokens int
 	var completionTokens int
@@ -201,6 +210,13 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			return errorWrapper(err, "marshal_text_request_failed", http.StatusInternalServerError)
 		}
 		requestBody = bytes.NewBuffer(jsonStr)
+	case APITypeZhipu:
+		zhipuRequest := requestOpenAI2Zhipu(textRequest)
+		jsonStr, err := json.Marshal(zhipuRequest)
+		if err != nil {
+			return errorWrapper(err, "marshal_text_request_failed", http.StatusInternalServerError)
+		}
+		requestBody = bytes.NewBuffer(jsonStr)
 	}
 	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
@@ -222,6 +238,9 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			anthropicVersion = "2023-06-01"
 		}
 		req.Header.Set("anthropic-version", anthropicVersion)
+	case APITypeZhipu:
+		token := getZhipuToken(apiKey)
+		req.Header.Set("Authorization", token)
 	}
 	req.Header.Set("Content-Type", c.Request.Header.Get("Content-Type"))
 	req.Header.Set("Accept", c.Request.Header.Get("Accept"))
@@ -253,11 +272,15 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if strings.HasPrefix(textRequest.Model, "gpt-4") {
 				completionRatio = 2
 			}
-			if isStream && apiType != APITypeBaidu {
+			if isStream && apiType != APITypeBaidu && apiType != APITypeZhipu {
 				completionTokens = countTokenText(streamResponseText, textRequest.Model)
 			} else {
 				promptTokens = textResponse.Usage.PromptTokens
 				completionTokens = textResponse.Usage.CompletionTokens
+				if apiType == APITypeZhipu {
+					// zhipu's API does not return prompt tokens & completion tokens
+					promptTokens = textResponse.Usage.TotalTokens
+				}
 			}
 			quota = promptTokens + int(float64(completionTokens)*completionRatio)
 			quota = int(float64(quota) * ratio)
@@ -305,7 +328,9 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if err != nil {
 				return err
 			}
-			textResponse.Usage = *usage
+			if usage != nil {
+				textResponse.Usage = *usage
+			}
 			return nil
 		}
 	case APITypeClaude:
@@ -321,7 +346,9 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if err != nil {
 				return err
 			}
-			textResponse.Usage = *usage
+			if usage != nil {
+				textResponse.Usage = *usage
+			}
 			return nil
 		}
 	case APITypeBaidu:
@@ -330,14 +357,18 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if err != nil {
 				return err
 			}
-			textResponse.Usage = *usage
+			if usage != nil {
+				textResponse.Usage = *usage
+			}
 			return nil
 		} else {
 			err, usage := baiduHandler(c, resp)
 			if err != nil {
 				return err
 			}
-			textResponse.Usage = *usage
+			if usage != nil {
+				textResponse.Usage = *usage
+			}
 			return nil
 		}
 	case APITypePaLM:
@@ -353,7 +384,29 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if err != nil {
 				return err
 			}
-			textResponse.Usage = *usage
+			if usage != nil {
+				textResponse.Usage = *usage
+			}
+			return nil
+		}
+	case APITypeZhipu:
+		if isStream {
+			err, usage := zhipuStreamHandler(c, resp)
+			if err != nil {
+				return err
+			}
+			if usage != nil {
+				textResponse.Usage = *usage
+			}
+			return nil
+		} else {
+			err, usage := zhipuHandler(c, resp)
+			if err != nil {
+				return err
+			}
+			if usage != nil {
+				textResponse.Usage = *usage
+			}
 			return nil
 		}
 	default:

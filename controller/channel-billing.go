@@ -86,7 +86,6 @@ func GetAuthHeader(token string) http.Header {
 }
 
 func GetResponseBody(method, url string, channel *model.Channel, headers http.Header) ([]byte, error) {
-	client := &http.Client{}
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, err
@@ -94,7 +93,7 @@ func GetResponseBody(method, url string, channel *model.Channel, headers http.He
 	for k := range headers {
 		req.Header.Add(k, headers.Get(k))
 	}
-	res, err := client.Do(req)
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

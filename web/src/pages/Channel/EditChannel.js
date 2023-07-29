@@ -39,6 +39,27 @@ const EditChannel = () => {
         value = parseInt(value)
     }
     setInputs((inputs) => ({ ...inputs, [name]: value }));
+    if (name === 'type' && inputs.models.length === 0) {
+      let localModels = [];
+      switch (value) {
+        case 14:
+          localModels = ['claude-instant-1', 'claude-2'];
+          break;
+        case 11:
+          localModels = ['PaLM-2'];
+          break;
+        case 15:
+          localModels = ['ERNIE-Bot', 'ERNIE-Bot-turbo', 'Embedding-V1'];
+          break;
+        case 17:
+          localModels = ['qwen-v1', 'qwen-plus-v1'];
+          break;
+        case 16:
+          localModels = ['chatglm_pro', 'chatglm_std', 'chatglm_lite'];
+          break;
+      }
+      setInputs((inputs) => ({ ...inputs, models: localModels }));
+    }
   };
 
   const loadChannel = async () => {
@@ -289,8 +310,8 @@ const EditChannel = () => {
             }}>清除所有模型</Button>
             <Input
               action={
-                <Button type={'button'} onClick={()=>{
-                  if (customModel.trim() === "") return;
+                <Button type={'button'} onClick={() => {
+                  if (customModel.trim() === '') return;
                   if (inputs.models.includes(customModel)) return;
                   let localModels = [...inputs.models];
                   localModels.push(customModel);
@@ -298,9 +319,9 @@ const EditChannel = () => {
                   localModelOptions.push({
                     key: customModel,
                     text: customModel,
-                    value: customModel,
+                    value: customModel
                   });
-                  setModelOptions(modelOptions=>{
+                  setModelOptions(modelOptions => {
                     return [...modelOptions, ...localModelOptions];
                   });
                   setCustomModel('');
@@ -342,7 +363,7 @@ const EditChannel = () => {
                 label='密钥'
                 name='key'
                 required
-                placeholder={inputs.type === 15 ? "请输入 access token，当前版本暂不支持自动刷新，请每 30 天更新一次" : '请输入渠道对应的鉴权密钥'}
+                placeholder={inputs.type === 15 ? '请输入 access token，当前版本暂不支持自动刷新，请每 30 天更新一次' : '请输入渠道对应的鉴权密钥'}
                 onChange={handleInputChange}
                 value={inputs.key}
                 autoComplete='new-password'
@@ -373,7 +394,7 @@ const EditChannel = () => {
               </Form.Field>
             )
           }
-          <Button type={isEdit ? "button" : "submit"} positive onClick={submit}>提交</Button>
+          <Button type={isEdit ? 'button' : 'submit'} positive onClick={submit}>提交</Button>
         </Form>
       </Segment>
     </>

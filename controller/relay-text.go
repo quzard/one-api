@@ -307,7 +307,6 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 	}
 
 	var textResponse TextResponse
-	var streamResponseText string
 
 	defer func() {
 		if consumeQuota {
@@ -319,16 +318,10 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if strings.HasPrefix(textRequest.Model, "gpt-4") {
 				completionRatio = 2
 			}
-			if isStream && apiType != APITypeBaidu && apiType != APITypeZhipu && apiType != APITypeAli {
-				completionTokens = countTokenText(streamResponseText, textRequest.Model)
-			} else {
-				promptTokens = textResponse.Usage.PromptTokens
-				completionTokens = textResponse.Usage.CompletionTokens
-				if apiType == APITypeZhipu {
-					// zhipu's API does not return prompt tokens & completion tokens
-					promptTokens = textResponse.Usage.TotalTokens
-				}
-			}
+
+			promptTokens = textResponse.Usage.PromptTokens
+			completionTokens = textResponse.Usage.CompletionTokens
+
 			quota = promptTokens + int(float64(completionTokens)*completionRatio)
 			quota = int(float64(quota) * ratio)
 			if ratio != 0 && quota <= 0 {
@@ -368,7 +361,8 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if err != nil {
 				return err
 			}
-			streamResponseText = responseText
+			textResponse.Usage.PromptTokens = promptTokens
+			textResponse.Usage.CompletionTokens = countTokenText(responseText, textRequest.Model)
 			return nil
 		} else {
 			err, usage := openaiHandler(c, resp, consumeQuota)
@@ -386,7 +380,8 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if err != nil {
 				return err
 			}
-			streamResponseText = responseText
+			textResponse.Usage.PromptTokens = promptTokens
+			textResponse.Usage.CompletionTokens = countTokenText(responseText, textRequest.Model)
 			return nil
 		} else {
 			err, usage := claudeHandler(c, resp, promptTokens, textRequest.Model)
@@ -431,7 +426,8 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if err != nil {
 				return err
 			}
-			streamResponseText = responseText
+			textResponse.Usage.PromptTokens = promptTokens
+			textResponse.Usage.CompletionTokens = countTokenText(responseText, textRequest.Model)
 			return nil
 		} else {
 			err, usage := palmHandler(c, resp, promptTokens, textRequest.Model)
@@ -452,6 +448,8 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if usage != nil {
 				textResponse.Usage = *usage
 			}
+			// zhipu's API does not return prompt tokens & completion tokens
+			textResponse.Usage.PromptTokens = textResponse.Usage.TotalTokens
 			return nil
 		} else {
 			err, usage := zhipuHandler(c, resp)
@@ -461,6 +459,8 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			if usage != nil {
 				textResponse.Usage = *usage
 			}
+			// zhipu's API does not return prompt tokens & completion tokens
+			textResponse.Usage.PromptTokens = textResponse.Usage.TotalTokens
 			return nil
 		}
 	case APITypeAli:

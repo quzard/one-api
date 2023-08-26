@@ -17,7 +17,7 @@ var Footer = ""
 var Logo = ""
 var TopUpLink = ""
 var ChatLink = ""
-var QuotaPerUnit = 500 * 1000.0 // $0.002 / 1K tokens
+var QuotaPerUnit = 500 * 1000.0 // 1K tokens / $0.002
 var DisplayInCurrencyEnabled = true
 var DisplayTokenStatEnabled = true
 

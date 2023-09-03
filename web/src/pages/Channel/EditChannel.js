@@ -14,13 +14,13 @@ function type2secretPrompt(type) {
   // inputs.type === 15 ? '按照如下格式输入：APIKey|SecretKey' : (inputs.type === 18 ? '按照如下格式输入：APPID|APISecret|APIKey' : '请输入渠道对应的鉴权密钥')
   switch (type) {
     case 15:
-      return "按照如下格式输入：APIKey|SecretKey"
+      return '按照如下格式输入：APIKey|SecretKey';
     case 18:
-      return "按照如下格式输入：APPID|APISecret|APIKey"
+      return '按照如下格式输入：APPID|APISecret|APIKey';
     case 22:
-      return "按照如下格式输入：APIKey-AppId，例如：fastgpt-0sp2gtvfdgyi4k30jwlgwf1i-64f335d84283f05518e9e041"
+      return '按照如下格式输入：APIKey-AppId，例如：fastgpt-0sp2gtvfdgyi4k30jwlgwf1i-64f335d84283f05518e9e041';
     default:
-      return "请输入渠道对应的鉴权密钥"
+      return '请输入渠道对应的鉴权密钥';
   }
 }
 
@@ -71,7 +71,7 @@ const EditChannel = () => {
           localModels = ['ERNIE-Bot', 'ERNIE-Bot-turbo', 'Embedding-V1'];
           break;
         case 17:
-          localModels = ['qwen-v1', 'qwen-plus-v1'];
+          localModels = ['qwen-v1', 'qwen-plus-v1', 'text-embedding-v1'];
           break;
         case 16:
           localModels = ['chatglm_pro', 'chatglm_std', 'chatglm_lite'];
@@ -214,6 +214,24 @@ const EditChannel = () => {
     } else {
       showError(message);
     }
+  };
+
+  const addCustomModel = () => {
+    if (customModel.trim() === '') return;
+    if (inputs.models.includes(customModel)) return;
+    let localModels = [...inputs.models];
+    localModels.push(customModel);
+    let localModelOptions = [];
+    localModelOptions.push({
+      key: customModel,
+      text: customModel,
+      value: customModel
+    });
+    setModelOptions(modelOptions => {
+      return [...modelOptions, ...localModelOptions];
+    });
+    setCustomModel('');
+    handleInputChange(null, { name: 'models', value: localModels });
   };
 
   return (
@@ -369,28 +387,18 @@ const EditChannel = () => {
             }}>清除所有模型</Button>
             <Input
               action={
-                <Button type={'button'} onClick={() => {
-                  if (customModel.trim() === '') return;
-                  if (inputs.models.includes(customModel)) return;
-                  let localModels = [...inputs.models];
-                  localModels.push(customModel);
-                  let localModelOptions = [];
-                  localModelOptions.push({
-                    key: customModel,
-                    text: customModel,
-                    value: customModel
-                  });
-                  setModelOptions(modelOptions => {
-                    return [...modelOptions, ...localModelOptions];
-                  });
-                  setCustomModel('');
-                  handleInputChange(null, { name: 'models', value: localModels });
-                }}>填入</Button>
+                <Button type={'button'} onClick={addCustomModel}>填入</Button>
               }
               placeholder='输入自定义模型名称'
               value={customModel}
               onChange={(e, { value }) => {
                 setCustomModel(value);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  addCustomModel();
+                  e.preventDefault();
+                }
               }}
             />
           </div>

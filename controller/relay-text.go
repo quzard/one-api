@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,6 +38,7 @@ func init() {
 
 func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 	channelType := c.GetInt("channel")
+	channelId := c.GetInt("channel_id")
 	tokenId := c.GetInt("token_id")
 	userId := c.GetInt("id")
 	consumeQuota := c.GetBool("consume_quota")
@@ -211,6 +213,7 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 		// in this case, we do not pre-consume quota
 		// because the user has enough quota
 		preConsumedQuota = 0
+		common.LogInfo(c.Request.Context(), fmt.Sprintf("user %d has enough quota %d, trusted and no need to pre-consume", userId, userQuota))
 	}
 	if consumeQuota && preConsumedQuota > 0 && strings.Contains(channelName, "免费") == false {
 		err := model.PreConsumeTokenQuota(tokenId, preConsumedQuota)
@@ -348,15 +351,23 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 		isStream = isStream || strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream")
 
 		if resp.StatusCode != http.StatusOK {
+			if preConsumedQuota != 0 {
+				go func(ctx context.Context) {
+					// return pre-consumed quota
+					err := model.PostConsumeTokenQuota(tokenId, -preConsumedQuota)
+					if err != nil {
+						common.LogError(ctx, "error return pre-consumed quota: "+err.Error())
+					}
+				}(c.Request.Context())
+			}
 			return relayErrorHandler(resp)
 		}
 	}
 
 	var textResponse TextResponse
 	tokenName := c.GetString("token_name")
-	channelId := c.GetInt("channel_id")
 
-	defer func() {
+	defer func(ctx context.Context) {
 		// c.Writer.Flush()
 		go func() {
 			if consumeQuota {
@@ -377,16 +388,16 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 					quota = 0
 				}
 				logContent := fmt.Sprintf("模型倍率 %.2f，分组倍率 %.2f", modelRatio, groupRatio)
-				model.RecordConsumeLog(userId, promptTokens, completionTokens, textRequest.Model, tokenName, quota, logContent,channelName)
+				model.RecordConsumeLog(ctx, userId, channelId, promptTokens, completionTokens, textRequest.Model, tokenName, quota, logContent, channelName)
 				if strings.Contains(channelName, "免费") == false {
 					quotaDelta := quota - preConsumedQuota
 					err := model.PostConsumeTokenQuota(tokenId, quotaDelta)
 					if err != nil {
-						common.SysError("error consuming token remain quota: " + err.Error())
+						common.LogError(ctx, "error consuming token remain quota: "+err.Error())
 					}
 					err = model.CacheUpdateUserQuota(userId)
 					if err != nil {
-						common.SysError("error update user quota cache: " + err.Error())
+						common.LogError(ctx, "error update user quota cache: "+err.Error())
 					}
 					if quota != 0 {
 						model.UpdateUserUsedQuotaAndRequestCount(userId, quota)
@@ -395,7 +406,7 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 				}
 			}
 		}()
-	}()
+	}(c.Request.Context())
 	switch apiType {
 	case APITypeOpenAI:
 		if isStream {
@@ -533,24 +544,26 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			return nil
 		}
 	case APITypeXunfei:
-		if isStream {
-			auth := c.Request.Header.Get("Authorization")
-			auth = strings.TrimPrefix(auth, "Bearer ")
-			splits := strings.Split(auth, "|")
-			if len(splits) != 3 {
-				return errorWrapper(errors.New("invalid auth"), "invalid_auth", http.StatusBadRequest)
-			}
-			err, usage := xunfeiStreamHandler(c, textRequest, splits[0], splits[1], splits[2])
-			if err != nil {
-				return err
-			}
-			if usage != nil {
-				textResponse.Usage = *usage
-			}
-			return nil
-		} else {
-			return errorWrapper(errors.New("xunfei api does not support non-stream mode"), "invalid_api_type", http.StatusBadRequest)
+		auth := c.Request.Header.Get("Authorization")
+		auth = strings.TrimPrefix(auth, "Bearer ")
+		splits := strings.Split(auth, "|")
+		if len(splits) != 3 {
+			return errorWrapper(errors.New("invalid auth"), "invalid_auth", http.StatusBadRequest)
 		}
+		var err *OpenAIErrorWithStatusCode
+		var usage *Usage
+		if isStream {
+			err, usage = xunfeiStreamHandler(c, textRequest, splits[0], splits[1], splits[2])
+		} else {
+			err, usage = xunfeiHandler(c, textRequest, splits[0], splits[1], splits[2])
+		}
+		if err != nil {
+			return err
+		}
+		if usage != nil {
+			textResponse.Usage = *usage
+		}
+		return nil
 	case APITypeAIProxyLibrary:
 		if isStream {
 			err, usage := aiProxyLibraryStreamHandler(c, resp)

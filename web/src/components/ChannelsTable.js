@@ -421,6 +421,7 @@ const ChannelsTable = () => {
                       basic
                     />
                   </Table.Cell>
+                  <Table.Cell>{channel.used_quota}</Table.Cell>
                   <Table.Cell>
                     <Popup
                         trigger={<Input type="number"  defaultValue={channel.priority} onBlur={(event) => {
@@ -437,7 +438,6 @@ const ChannelsTable = () => {
                         basic
                     />
                   </Table.Cell>
-                  <Table.Cell>{channel.used_quota}</Table.Cell>
                   <Table.Cell>
                     <div>
                       <Button

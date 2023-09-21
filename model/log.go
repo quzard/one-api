@@ -143,7 +143,7 @@ func SearchUserLogs(userId int, keyword string) (logs []*Log, err error) {
 }
 
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, channelName string) (quota int) {
-	tx := DB.Table("logs").Select("sum(quota)")
+	tx := DB.Table("logs").Select("ifnull(sum(quota),0)")
 	if username != "" {
 		tx = tx.Where("username = ?", username)
 	}
@@ -170,7 +170,7 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 }
 
 func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channelName string) (token int) {
-	tx := DB.Table("logs").Select("sum(prompt_tokens) + sum(completion_tokens)")
+	tx := DB.Table("logs").Select("ifnull(sum(prompt_tokens),0) + ifnull(sum(completion_tokens),0)")
 	if username != "" {
 		tx = tx.Where("username = ?", username)
 	}

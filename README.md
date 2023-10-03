@@ -72,6 +72,7 @@ _✨ 通过标准的 OpenAI API 格式访问所有的大模型，开箱即用 �
    + [x] [讯飞星火认知大模型](https://www.xfyun.cn/doc/spark/Web.html)
    + [x] [智谱 ChatGLM 系列模型](https://bigmodel.cn)
    + [x] [360 智脑](https://ai.360.cn)
+   + [x] [腾讯混元大模型](https://cloud.tencent.com/document/product/1729)
 2. 支持配置镜像以及众多第三方代理服务：
    + [x] [OpenAI-SB](https://openai-sb.com)
    + [x] [CloseAI](https://console.closeai-asia.com/r/2412)
@@ -389,6 +390,12 @@ https://openai.justsong.cn
    + 检查是否启用了 HTTPS，浏览器会拦截 HTTPS 域名下的 HTTP 请求。
 6. 报错：`当前分组负载已饱和，请稍后再试`
    + 上游通道 429 了。
+7. 升级之后我的数据会丢失吗？
+   + 如果使用 MySQL，不会。
+   + 如果使用 SQLite，需要按照我所给的部署命令挂载 volume 持久化 one-api.db 数据库文件，否则容器重启后数据会丢失。
+8. 升级之前数据库需要做变更吗？
+   + 一般情况下不需要，系统将在初始化的时候自动调整。
+   + 如果需要的话，我会在更新日志中说明，并给出脚本。
 
 ## 相关项目
 * [FastGPT](https://github.com/labring/FastGPT): 基于 LLM 大语言模型的知识库问答系统

@@ -6,13 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"io"
+	"math"
 	"net/http"
 	"one-api/common"
 	"one-api/model"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -31,7 +33,14 @@ var httpClient *http.Client
 var impatientHTTPClient *http.Client
 
 func init() {
-	httpClient = &http.Client{}
+	if common.RelayTimeout == 0 {
+		httpClient = &http.Client{}
+	} else {
+		httpClient = &http.Client{
+			Timeout: time.Duration(common.RelayTimeout) * time.Second,
+		}
+	}
+
 	impatientHTTPClient = &http.Client{
 		Timeout: 5 * time.Second,
 	}
@@ -119,12 +128,7 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 	if c.GetString("base_url") != "" {
 		baseURL = c.GetString("base_url")
 	}
-	fullRequestURL := fmt.Sprintf("%s%s", baseURL, requestURL)
-	if channelType == common.ChannelTypeOpenAI {
-		if strings.HasPrefix(baseURL, "https://gateway.ai.cloudflare.com") {
-			fullRequestURL = fmt.Sprintf("%s%s", baseURL, strings.TrimPrefix(requestURL, "/v1"))
-		}
-	}
+	fullRequestURL := getFullRequestURL(baseURL, requestURL, channelType)
 	switch apiType {
 	case APITypeOpenAI:
 		if channelType == common.ChannelTypeAzure {
@@ -157,6 +161,8 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			fullRequestURL = "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions"
 		case "ERNIE-Bot-turbo":
 			fullRequestURL = "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/eb-instant"
+		case "ERNIE-Bot-4":
+			fullRequestURL = "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions_pro"
 		case "BLOOMZ-7B":
 			fullRequestURL = "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/bloomz_7b1"
 		case "Embedding-V1":
@@ -362,11 +368,16 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 			}
 		case APITypeTencent:
 			req.Header.Set("Authorization", apiKey)
+		case APITypePaLM:
+			// do not set Authorization header
 		default:
 			req.Header.Set("Authorization", "Bearer "+apiKey)
 		}
 		req.Header.Set("Content-Type", c.Request.Header.Get("Content-Type"))
 		req.Header.Set("Accept", c.Request.Header.Get("Accept"))
+		if isStream && c.Request.Header.Get("Accept") == "" {
+			req.Header.Set("Accept", "text/event-stream")
+		}
 		//req.Header.Set("Connection", c.Request.Header.Get("Connection"))
 		resp, err = httpClient.Do(req)
 		if err != nil {
@@ -407,9 +418,7 @@ func relayTextHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode {
 				completionRatio := common.GetCompletionRatio(textRequest.Model)
 				promptTokens = textResponse.Usage.PromptTokens
 				completionTokens = textResponse.Usage.CompletionTokens
-
-				quota = promptTokens + int(float64(completionTokens)*completionRatio)
-				quota = int(float64(quota) * ratio)
+				quota = int(math.Ceil((float64(promptTokens) + float64(completionTokens)*completionRatio) * ratio))
 				if ratio != 0 && quota <= 0 {
 					quota = 1
 				}

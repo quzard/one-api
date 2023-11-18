@@ -21,7 +21,7 @@ func relayAudioHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode 
 	userId := c.GetInt("id")
 	group := c.GetString("group")
 	tokenName := c.GetString("token_name")
-
+	channelName := c.GetString("channel_name")
 	var ttsRequest TextToSpeechRequest
 	if relayMode == RelayModeAudioSpeech {
 		// Read JSON
@@ -121,7 +121,7 @@ func relayAudioHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode 
 
 	if relayMode == RelayModeAudioSpeech {
 		defer func(ctx context.Context) {
-			go postConsumeQuota(ctx, tokenId, quota, userId, channelId, modelRatio, groupRatio, audioModel, tokenName)
+			go postConsumeQuota(ctx, tokenId, quota, userId, channelId, modelRatio, groupRatio, audioModel, tokenName, channelName)
 		}(c.Request.Context())
 	} else {
 		responseBody, err := io.ReadAll(resp.Body)
@@ -140,7 +140,7 @@ func relayAudioHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode 
 		defer func(ctx context.Context) {
 			quota := countTokenText(whisperResponse.Text, audioModel)
 			quotaDelta := quota - preConsumedQuota
-			go postConsumeQuota(ctx, tokenId, quotaDelta, userId, channelId, modelRatio, groupRatio, audioModel, tokenName)
+			go postConsumeQuota(ctx, tokenId, quotaDelta, userId, channelId, modelRatio, groupRatio, audioModel, tokenName, channelName)
 		}(c.Request.Context())
 		resp.Body = io.NopCloser(bytes.NewBuffer(responseBody))
 	}

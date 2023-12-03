@@ -169,7 +169,7 @@ func relayAudioHelper(c *gin.Context, relayMode int) *OpenAIErrorWithStatusCode 
 	}
 	quotaDelta := quota - preConsumedQuota
 	defer func(ctx context.Context) {
-		go postConsumeQuota(ctx, tokenId, quotaDelta, quota, userId, channelId, modelRatio, groupRatio, audioModel, tokenName)
+		go postConsumeQuota(ctx, tokenId, quotaDelta, quota, userId, channelId, modelRatio, groupRatio, audioModel, tokenName, channelName)
 	}(c.Request.Context())
 
 	for k, v := range resp.Header {

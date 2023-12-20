@@ -50,9 +50,6 @@ func Distribute() func(c *gin.Context) {
 					modelRequest.Model = "text-moderation-stable"
 				}
 			}
-			if strings.HasPrefix(modelRequest.Model, "gpt-35-turbo") {
-				modelRequest.Model = strings.Replace(modelRequest.Model, "gpt-35-turbo", "gpt-3.5-turbo", 1)
-			}
 			if strings.HasSuffix(c.Request.URL.Path, "embeddings") {
 				if modelRequest.Model == "" {
 					modelRequest.Model = c.Param("model")

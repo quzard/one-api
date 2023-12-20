@@ -73,7 +73,7 @@ const EditChannel = () => {
           localModels = ['ERNIE-Bot', 'ERNIE-Bot-turbo', 'ERNIE-Bot-4', 'Embedding-V1'];
           break;
         case 17:
-          localModels = ['qwen-turbo', 'qwen-plus', 'text-embedding-v1'];
+          localModels = ['qwen-turbo', 'qwen-plus', 'qwen-max', 'qwen-max-longcontext', 'text-embedding-v1'];
           break;
         case 16:
           localModels = ['chatglm_turbo', 'chatglm_pro', 'chatglm_std', 'chatglm_lite'];
@@ -86,6 +86,9 @@ const EditChannel = () => {
           break;
         case 23:
           localModels = ['hunyuan'];
+          break;
+        case 24:
+          localModels = ['gemini-pro'];
           break;
       }
       setInputs((inputs) => ({ ...inputs, models: localModels }));
@@ -355,6 +358,20 @@ const EditChannel = () => {
                   label='知识库 ID'
                   name='other'
                   placeholder={'请输入知识库 ID，例如：123456'}
+                  onChange={handleInputChange}
+                  value={inputs.other}
+                  autoComplete='new-password'
+                />
+              </Form.Field>
+            )
+          }
+          {
+            inputs.type === 17 && (
+              <Form.Field>
+                <Form.Input
+                  label='插件参数'
+                  name='other'
+                  placeholder={'请输入插件参数，即 X-DashScope-Plugin 请求头的取值'}
                   onChange={handleInputChange}
                   value={inputs.other}
                   autoComplete='new-password'

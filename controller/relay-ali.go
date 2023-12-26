@@ -3,11 +3,13 @@ package controller
 import (
 	"bufio"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
+	"fmt"
 	"io"
 	"net/http"
 	"one-api/common"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 // https://help.aliyun.com/document_detail/613695.html?spm=a2c4g.2399480.0.0.1adb778fAdzP9w#341800c0f8w0r
@@ -92,6 +94,7 @@ func requestOpenAI2Ali(request GeneralOpenAIRequest) *AliChatRequest {
 			Content: message.StringContent(),
 			Role:    strings.ToLower(message.Role),
 		})
+		common.SysLog(fmt.Sprintf("Content:%v, Role:%v", message.StringContent(), strings.ToLower(message.Role)))
 	}
 	enableSearch := false
 	aliModel := request.Model

@@ -1,43 +1,18 @@
-package controller
+package anthropic
 
 import (
 	"bufio"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/songquanpeng/one-api/common"
+	"github.com/songquanpeng/one-api/common/helper"
+	"github.com/songquanpeng/one-api/common/logger"
+	"github.com/songquanpeng/one-api/relay/channel/openai"
 	"io"
 	"net/http"
-	"one-api/common"
 	"strings"
 )
-
-type ClaudeMetadata struct {
-	UserId string `json:"user_id"`
-}
-
-type ClaudeRequest struct {
-	Model             string   `json:"model"`
-	Prompt            string   `json:"prompt"`
-	MaxTokensToSample int      `json:"max_tokens_to_sample"`
-	StopSequences     []string `json:"stop_sequences,omitempty"`
-	Temperature       float64  `json:"temperature,omitempty"`
-	TopP              float64  `json:"top_p,omitempty"`
-	TopK              int      `json:"top_k,omitempty"`
-	//ClaudeMetadata    `json:"metadata,omitempty"`
-	Stream bool `json:"stream,omitempty"`
-}
-
-type ClaudeError struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
-}
-
-type ClaudeResponse struct {
-	Completion string      `json:"completion"`
-	StopReason string      `json:"stop_reason"`
-	Model      string      `json:"model"`
-	Error      ClaudeError `json:"error"`
-}
 
 func stopReasonClaude2OpenAI(reason string) string {
 	switch reason {
@@ -50,8 +25,8 @@ func stopReasonClaude2OpenAI(reason string) string {
 	}
 }
 
-func requestOpenAI2Claude(textRequest GeneralOpenAIRequest) *ClaudeRequest {
-	claudeRequest := ClaudeRequest{
+func ConvertRequest(textRequest openai.GeneralOpenAIRequest) *Request {
+	claudeRequest := Request{
 		Model:             textRequest.Model,
 		Prompt:            "",
 		MaxTokensToSample: textRequest.MaxTokens,
@@ -80,43 +55,43 @@ func requestOpenAI2Claude(textRequest GeneralOpenAIRequest) *ClaudeRequest {
 	return &claudeRequest
 }
 
-func streamResponseClaude2OpenAI(claudeResponse *ClaudeResponse) *ChatCompletionsStreamResponse {
-	var choice ChatCompletionsStreamResponseChoice
+func streamResponseClaude2OpenAI(claudeResponse *Response) *openai.ChatCompletionsStreamResponse {
+	var choice openai.ChatCompletionsStreamResponseChoice
 	choice.Delta.Content = claudeResponse.Completion
 	finishReason := stopReasonClaude2OpenAI(claudeResponse.StopReason)
 	if finishReason != "null" {
 		choice.FinishReason = &finishReason
 	}
-	var response ChatCompletionsStreamResponse
+	var response openai.ChatCompletionsStreamResponse
 	response.Object = "chat.completion.chunk"
 	response.Model = claudeResponse.Model
-	response.Choices = []ChatCompletionsStreamResponseChoice{choice}
+	response.Choices = []openai.ChatCompletionsStreamResponseChoice{choice}
 	return &response
 }
 
-func responseClaude2OpenAI(claudeResponse *ClaudeResponse) *OpenAITextResponse {
-	choice := OpenAITextResponseChoice{
+func responseClaude2OpenAI(claudeResponse *Response) *openai.TextResponse {
+	choice := openai.TextResponseChoice{
 		Index: 0,
-		Message: Message{
+		Message: openai.Message{
 			Role:    "assistant",
 			Content: strings.TrimPrefix(claudeResponse.Completion, " "),
 			Name:    nil,
 		},
 		FinishReason: stopReasonClaude2OpenAI(claudeResponse.StopReason),
 	}
-	fullTextResponse := OpenAITextResponse{
-		Id:      fmt.Sprintf("chatcmpl-%s", common.GetUUID()),
+	fullTextResponse := openai.TextResponse{
+		Id:      fmt.Sprintf("chatcmpl-%s", helper.GetUUID()),
 		Object:  "chat.completion",
-		Created: common.GetTimestamp(),
-		Choices: []OpenAITextResponseChoice{choice},
+		Created: helper.GetTimestamp(),
+		Choices: []openai.TextResponseChoice{choice},
 	}
 	return &fullTextResponse
 }
 
-func claudeStreamHandler(c *gin.Context, resp *http.Response) (*OpenAIErrorWithStatusCode, string) {
+func StreamHandler(c *gin.Context, resp *http.Response) (*openai.ErrorWithStatusCode, string) {
 	responseText := ""
-	responseId := fmt.Sprintf("chatcmpl-%s", common.GetUUID())
-	createdTime := common.GetTimestamp()
+	responseId := fmt.Sprintf("chatcmpl-%s", helper.GetUUID())
+	createdTime := helper.GetTimestamp()
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if atEOF && len(data) == 0 {
@@ -143,16 +118,16 @@ func claudeStreamHandler(c *gin.Context, resp *http.Response) (*OpenAIErrorWithS
 		}
 		stopChan <- true
 	}()
-	setEventStreamHeaders(c)
+	common.SetEventStreamHeaders(c)
 	c.Stream(func(w io.Writer) bool {
 		select {
 		case data := <-dataChan:
 			// some implementations may add \r at the end of data
 			data = strings.TrimSuffix(data, "\r")
-			var claudeResponse ClaudeResponse
+			var claudeResponse Response
 			err := json.Unmarshal([]byte(data), &claudeResponse)
 			if err != nil {
-				common.SysError("error unmarshalling stream response: " + err.Error())
+				logger.SysError("error unmarshalling stream response: " + err.Error())
 				return true
 			}
 			responseText += claudeResponse.Completion
@@ -161,7 +136,7 @@ func claudeStreamHandler(c *gin.Context, resp *http.Response) (*OpenAIErrorWithS
 			response.Created = createdTime
 			jsonStr, err := json.Marshal(response)
 			if err != nil {
-				common.SysError("error marshalling stream response: " + err.Error())
+				logger.SysError("error marshalling stream response: " + err.Error())
 				return true
 			}
 			c.Render(-1, common.CustomEvent{Data: "data: " + string(jsonStr)})
@@ -173,28 +148,28 @@ func claudeStreamHandler(c *gin.Context, resp *http.Response) (*OpenAIErrorWithS
 	})
 	err := resp.Body.Close()
 	if err != nil {
-		return errorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), ""
+		return openai.ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), ""
 	}
 	return nil, responseText
 }
 
-func claudeHandler(c *gin.Context, resp *http.Response, promptTokens int, model string) (*OpenAIErrorWithStatusCode, *Usage) {
+func Handler(c *gin.Context, resp *http.Response, promptTokens int, model string) (*openai.ErrorWithStatusCode, *openai.Usage) {
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return errorWrapper(err, "read_response_body_failed", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError), nil
 	}
 	err = resp.Body.Close()
 	if err != nil {
-		return errorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
 	}
-	var claudeResponse ClaudeResponse
+	var claudeResponse Response
 	err = json.Unmarshal(responseBody, &claudeResponse)
 	if err != nil {
-		return errorWrapper(err, "unmarshal_response_body_failed", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(err, "unmarshal_response_body_failed", http.StatusInternalServerError), nil
 	}
 	if claudeResponse.Error.Type != "" {
-		return &OpenAIErrorWithStatusCode{
-			OpenAIError: OpenAIError{
+		return &openai.ErrorWithStatusCode{
+			Error: openai.Error{
 				Message: claudeResponse.Error.Message,
 				Type:    claudeResponse.Error.Type,
 				Param:   "",
@@ -205,8 +180,8 @@ func claudeHandler(c *gin.Context, resp *http.Response, promptTokens int, model 
 	}
 	fullTextResponse := responseClaude2OpenAI(&claudeResponse)
 	fullTextResponse.Model = model
-	completionTokens := countTokenText(claudeResponse.Completion, model)
-	usage := Usage{
+	completionTokens := openai.CountTokenText(claudeResponse.Completion, model)
+	usage := openai.Usage{
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
 		TotalTokens:      promptTokens + completionTokens,
@@ -214,7 +189,7 @@ func claudeHandler(c *gin.Context, resp *http.Response, promptTokens int, model 
 	fullTextResponse.Usage = usage
 	jsonResponse, err := json.Marshal(fullTextResponse)
 	if err != nil {
-		return errorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
 	}
 	c.Writer.Header().Set("Content-Type", "application/json")
 	c.Writer.WriteHeader(resp.StatusCode)

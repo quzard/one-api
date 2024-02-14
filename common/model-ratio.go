@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"github.com/songquanpeng/one-api/common/logger"
 	"strings"
 	"time"
 )
@@ -44,6 +45,8 @@ var ModelRatio = map[string]float64{
 	"gpt-4-32k-0314":            30,
 	"gpt-4-32k-0613":            30,
 	"gpt-4-1106-preview":        5,    // $0.01 / 1K tokens
+	"gpt-4-0125-preview":        5,    // $0.01 / 1K tokens
+	"gpt-4-turbo-preview":       5,    // $0.01 / 1K tokens
 	"gpt-4-vision-preview":      5,    // $0.01 / 1K tokens
 	"gpt-3.5-turbo":             0.75, // $0.0015 / 1K tokens
 	"gpt-3.5-turbo-0301":        0.75,
@@ -52,6 +55,7 @@ var ModelRatio = map[string]float64{
 	"gpt-3.5-turbo-16k-0613":    1.5,
 	"gpt-3.5-turbo-instruct":    0.75, // $0.0015 / 1K tokens
 	"gpt-3.5-turbo-1106":        0.5,  // $0.001 / 1K tokens
+	"gpt-3.5-turbo-0125":        0.25, // $0.0005 / 1K tokens
 	"davinci-002":               1,    // $0.002 / 1K tokens
 	"babbage-002":               0.2,  // $0.0004 / 1K tokens
 	"text-ada-001":              0.2,
@@ -71,6 +75,8 @@ var ModelRatio = map[string]float64{
 	"babbage":                   10,
 	"ada":                       10,
 	"text-embedding-ada-002":    0.05,
+	"text-embedding-3-small":    0.01,
+	"text-embedding-3-large":    0.065,
 	"text-search-ada-doc-001":   10,
 	"text-moderation-stable":    0.1,
 	"text-moderation-latest":    0.1,
@@ -107,7 +113,7 @@ var ModelRatio = map[string]float64{
 func ModelRatio2JSONString() string {
 	jsonBytes, err := json.Marshal(ModelRatio)
 	if err != nil {
-		SysError("error marshalling model ratio: " + err.Error())
+		logger.SysError("error marshalling model ratio: " + err.Error())
 	}
 	return string(jsonBytes)
 }
@@ -123,14 +129,37 @@ func GetModelRatio(name string) float64 {
 	}
 	ratio, ok := ModelRatio[name]
 	if !ok {
-		SysError("model ratio not found: " + name)
+		logger.SysError("model ratio not found: " + name)
 		return 30
 	}
 	return ratio
 }
 
+var CompletionRatio = map[string]float64{}
+
+func CompletionRatio2JSONString() string {
+	jsonBytes, err := json.Marshal(CompletionRatio)
+	if err != nil {
+		logger.SysError("error marshalling completion ratio: " + err.Error())
+	}
+	return string(jsonBytes)
+}
+
+func UpdateCompletionRatioByJSONString(jsonStr string) error {
+	CompletionRatio = make(map[string]float64)
+	return json.Unmarshal([]byte(jsonStr), &CompletionRatio)
+}
+
 func GetCompletionRatio(name string) float64 {
+	if ratio, ok := CompletionRatio[name]; ok {
+		return ratio
+	}
 	if strings.HasPrefix(name, "gpt-3.5") {
+		if strings.HasSuffix(name, "0125") {
+			// https://openai.com/blog/new-embedding-models-and-api-updates
+			// Updated GPT-3.5 Turbo model and lower pricing
+			return 3
+		}
 		if strings.HasSuffix(name, "1106") {
 			return 2
 		}

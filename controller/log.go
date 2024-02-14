@@ -2,9 +2,9 @@ package controller
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/songquanpeng/one-api/common/config"
+	"github.com/songquanpeng/one-api/model"
 	"net/http"
-	"one-api/common"
-	"one-api/model"
 	"strconv"
 )
 
@@ -21,7 +21,7 @@ func GetAllLogs(c *gin.Context) {
 	modelName := c.Query("model_name")
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	channelName := c.Query("channel_name")
-	logs, err := model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, p*common.ItemsPerPage, common.ItemsPerPage, channel, channelName)
+	logs, err := model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, p*config.ItemsPerPage, config.ItemsPerPage, channel, channelName)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -49,7 +49,7 @@ func GetUserLogs(c *gin.Context) {
 	tokenName := c.Query("token_name")
 	modelName := c.Query("model_name")
 	channelName := c.Query("channel_name")
-	logs, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, p*common.ItemsPerPage, common.ItemsPerPage, channelName)
+	logs, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, p*config.ItemsPerPage, config.ItemsPerPage, channelName)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

@@ -1,13 +1,17 @@
-package controller
+package zhipu
 
 import (
 	"bufio"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
+	"github.com/songquanpeng/one-api/common"
+	"github.com/songquanpeng/one-api/common/helper"
+	"github.com/songquanpeng/one-api/common/logger"
+	"github.com/songquanpeng/one-api/relay/channel/openai"
+	"github.com/songquanpeng/one-api/relay/constant"
 	"io"
 	"net/http"
-	"one-api/common"
 	"strings"
 	"sync"
 	"time"
@@ -18,53 +22,13 @@ import (
 // https://open.bigmodel.cn/api/paas/v3/model-api/chatglm_std/invoke
 // https://open.bigmodel.cn/api/paas/v3/model-api/chatglm_std/sse-invoke
 
-type ZhipuMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type ZhipuRequest struct {
-	Prompt      []ZhipuMessage `json:"prompt"`
-	Temperature float64        `json:"temperature,omitempty"`
-	TopP        float64        `json:"top_p,omitempty"`
-	RequestId   string         `json:"request_id,omitempty"`
-	Incremental bool           `json:"incremental,omitempty"`
-}
-
-type ZhipuResponseData struct {
-	TaskId     string         `json:"task_id"`
-	RequestId  string         `json:"request_id"`
-	TaskStatus string         `json:"task_status"`
-	Choices    []ZhipuMessage `json:"choices"`
-	Usage      `json:"usage"`
-}
-
-type ZhipuResponse struct {
-	Code    int               `json:"code"`
-	Msg     string            `json:"msg"`
-	Success bool              `json:"success"`
-	Data    ZhipuResponseData `json:"data"`
-}
-
-type ZhipuStreamMetaResponse struct {
-	RequestId  string `json:"request_id"`
-	TaskId     string `json:"task_id"`
-	TaskStatus string `json:"task_status"`
-	Usage      `json:"usage"`
-}
-
-type zhipuTokenData struct {
-	Token      string
-	ExpiryTime time.Time
-}
-
 var zhipuTokens sync.Map
 var expSeconds int64 = 24 * 3600
 
-func getZhipuToken(apikey string) string {
+func GetToken(apikey string) string {
 	data, ok := zhipuTokens.Load(apikey)
 	if ok {
-		tokenData := data.(zhipuTokenData)
+		tokenData := data.(tokenData)
 		if time.Now().Before(tokenData.ExpiryTime) {
 			return tokenData.Token
 		}
@@ -72,7 +36,7 @@ func getZhipuToken(apikey string) string {
 
 	split := strings.Split(apikey, ".")
 	if len(split) != 2 {
-		common.SysError("invalid zhipu key: " + apikey)
+		logger.SysError("invalid zhipu key: " + apikey)
 		return ""
 	}
 
@@ -100,7 +64,7 @@ func getZhipuToken(apikey string) string {
 		return ""
 	}
 
-	zhipuTokens.Store(apikey, zhipuTokenData{
+	zhipuTokens.Store(apikey, tokenData{
 		Token:      tokenString,
 		ExpiryTime: expiryTime,
 	})
@@ -108,26 +72,26 @@ func getZhipuToken(apikey string) string {
 	return tokenString
 }
 
-func requestOpenAI2Zhipu(request GeneralOpenAIRequest) *ZhipuRequest {
-	messages := make([]ZhipuMessage, 0, len(request.Messages))
+func ConvertRequest(request openai.GeneralOpenAIRequest) *Request {
+	messages := make([]Message, 0, len(request.Messages))
 	for _, message := range request.Messages {
 		if message.Role == "system" {
-			messages = append(messages, ZhipuMessage{
+			messages = append(messages, Message{
 				Role:    "system",
 				Content: message.StringContent(),
 			})
-			messages = append(messages, ZhipuMessage{
+			messages = append(messages, Message{
 				Role:    "user",
 				Content: "Okay",
 			})
 		} else {
-			messages = append(messages, ZhipuMessage{
+			messages = append(messages, Message{
 				Role:    message.Role,
 				Content: message.StringContent(),
 			})
 		}
 	}
-	return &ZhipuRequest{
+	return &Request{
 		Prompt:      messages,
 		Temperature: request.Temperature,
 		TopP:        request.TopP,
@@ -135,18 +99,18 @@ func requestOpenAI2Zhipu(request GeneralOpenAIRequest) *ZhipuRequest {
 	}
 }
 
-func responseZhipu2OpenAI(response *ZhipuResponse) *OpenAITextResponse {
-	fullTextResponse := OpenAITextResponse{
+func responseZhipu2OpenAI(response *Response) *openai.TextResponse {
+	fullTextResponse := openai.TextResponse{
 		Id:      response.Data.TaskId,
 		Object:  "chat.completion",
-		Created: common.GetTimestamp(),
-		Choices: make([]OpenAITextResponseChoice, 0, len(response.Data.Choices)),
+		Created: helper.GetTimestamp(),
+		Choices: make([]openai.TextResponseChoice, 0, len(response.Data.Choices)),
 		Usage:   response.Data.Usage,
 	}
 	for i, choice := range response.Data.Choices {
-		openaiChoice := OpenAITextResponseChoice{
+		openaiChoice := openai.TextResponseChoice{
 			Index: i,
-			Message: Message{
+			Message: openai.Message{
 				Role:    choice.Role,
 				Content: strings.Trim(choice.Content, "\""),
 			},
@@ -160,34 +124,34 @@ func responseZhipu2OpenAI(response *ZhipuResponse) *OpenAITextResponse {
 	return &fullTextResponse
 }
 
-func streamResponseZhipu2OpenAI(zhipuResponse string) *ChatCompletionsStreamResponse {
-	var choice ChatCompletionsStreamResponseChoice
+func streamResponseZhipu2OpenAI(zhipuResponse string) *openai.ChatCompletionsStreamResponse {
+	var choice openai.ChatCompletionsStreamResponseChoice
 	choice.Delta.Content = zhipuResponse
-	response := ChatCompletionsStreamResponse{
+	response := openai.ChatCompletionsStreamResponse{
 		Object:  "chat.completion.chunk",
-		Created: common.GetTimestamp(),
+		Created: helper.GetTimestamp(),
 		Model:   "chatglm",
-		Choices: []ChatCompletionsStreamResponseChoice{choice},
+		Choices: []openai.ChatCompletionsStreamResponseChoice{choice},
 	}
 	return &response
 }
 
-func streamMetaResponseZhipu2OpenAI(zhipuResponse *ZhipuStreamMetaResponse) (*ChatCompletionsStreamResponse, *Usage) {
-	var choice ChatCompletionsStreamResponseChoice
+func streamMetaResponseZhipu2OpenAI(zhipuResponse *StreamMetaResponse) (*openai.ChatCompletionsStreamResponse, *openai.Usage) {
+	var choice openai.ChatCompletionsStreamResponseChoice
 	choice.Delta.Content = ""
-	choice.FinishReason = &stopFinishReason
-	response := ChatCompletionsStreamResponse{
+	choice.FinishReason = &constant.StopFinishReason
+	response := openai.ChatCompletionsStreamResponse{
 		Id:      zhipuResponse.RequestId,
 		Object:  "chat.completion.chunk",
-		Created: common.GetTimestamp(),
+		Created: helper.GetTimestamp(),
 		Model:   "chatglm",
-		Choices: []ChatCompletionsStreamResponseChoice{choice},
+		Choices: []openai.ChatCompletionsStreamResponseChoice{choice},
 	}
 	return &response, &zhipuResponse.Usage
 }
 
-func zhipuStreamHandler(c *gin.Context, resp *http.Response) (*OpenAIErrorWithStatusCode, *Usage) {
-	var usage *Usage
+func StreamHandler(c *gin.Context, resp *http.Response) (*openai.ErrorWithStatusCode, *openai.Usage) {
+	var usage *openai.Usage
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if atEOF && len(data) == 0 {
@@ -224,29 +188,29 @@ func zhipuStreamHandler(c *gin.Context, resp *http.Response) (*OpenAIErrorWithSt
 		}
 		stopChan <- true
 	}()
-	setEventStreamHeaders(c)
+	common.SetEventStreamHeaders(c)
 	c.Stream(func(w io.Writer) bool {
 		select {
 		case data := <-dataChan:
 			response := streamResponseZhipu2OpenAI(data)
 			jsonResponse, err := json.Marshal(response)
 			if err != nil {
-				common.SysError("error marshalling stream response: " + err.Error())
+				logger.SysError("error marshalling stream response: " + err.Error())
 				return true
 			}
 			c.Render(-1, common.CustomEvent{Data: "data: " + string(jsonResponse)})
 			return true
 		case data := <-metaChan:
-			var zhipuResponse ZhipuStreamMetaResponse
+			var zhipuResponse StreamMetaResponse
 			err := json.Unmarshal([]byte(data), &zhipuResponse)
 			if err != nil {
-				common.SysError("error unmarshalling stream response: " + err.Error())
+				logger.SysError("error unmarshalling stream response: " + err.Error())
 				return true
 			}
 			response, zhipuUsage := streamMetaResponseZhipu2OpenAI(&zhipuResponse)
 			jsonResponse, err := json.Marshal(response)
 			if err != nil {
-				common.SysError("error marshalling stream response: " + err.Error())
+				logger.SysError("error marshalling stream response: " + err.Error())
 				return true
 			}
 			usage = zhipuUsage
@@ -259,28 +223,28 @@ func zhipuStreamHandler(c *gin.Context, resp *http.Response) (*OpenAIErrorWithSt
 	})
 	err := resp.Body.Close()
 	if err != nil {
-		return errorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
 	}
 	return nil, usage
 }
 
-func zhipuHandler(c *gin.Context, resp *http.Response) (*OpenAIErrorWithStatusCode, *Usage) {
-	var zhipuResponse ZhipuResponse
+func Handler(c *gin.Context, resp *http.Response) (*openai.ErrorWithStatusCode, *openai.Usage) {
+	var zhipuResponse Response
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return errorWrapper(err, "read_response_body_failed", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError), nil
 	}
 	err = resp.Body.Close()
 	if err != nil {
-		return errorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
 	}
 	err = json.Unmarshal(responseBody, &zhipuResponse)
 	if err != nil {
-		return errorWrapper(err, "unmarshal_response_body_failed", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(err, "unmarshal_response_body_failed", http.StatusInternalServerError), nil
 	}
 	if !zhipuResponse.Success {
-		return &OpenAIErrorWithStatusCode{
-			OpenAIError: OpenAIError{
+		return &openai.ErrorWithStatusCode{
+			Error: openai.Error{
 				Message: zhipuResponse.Msg,
 				Type:    "zhipu_error",
 				Param:   "",
@@ -293,7 +257,7 @@ func zhipuHandler(c *gin.Context, resp *http.Response) (*OpenAIErrorWithStatusCo
 	fullTextResponse.Model = "chatglm"
 	jsonResponse, err := json.Marshal(fullTextResponse)
 	if err != nil {
-		return errorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
+		return openai.ErrorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
 	}
 	c.Writer.Header().Set("Content-Type", "application/json")
 	c.Writer.WriteHeader(resp.StatusCode)

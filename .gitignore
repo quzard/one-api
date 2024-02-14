@@ -8,3 +8,4 @@ build
 logs
 data
 **/.DS_Store
+/web/node_modules

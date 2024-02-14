@@ -2,8 +2,8 @@ package controller
 
 import (
 	"fmt"
-
 	"github.com/gin-gonic/gin"
+	"github.com/songquanpeng/one-api/relay/channel/openai"
 )
 
 // https://platform.openai.com/docs/api-reference/models/list
@@ -172,6 +172,15 @@ func init() {
 			Parent:     nil,
 		},
 		{
+			Id:         "gpt-3.5-turbo-0125",
+			Object:     "model",
+			Created:    1706232090,
+			OwnedBy:    "openai",
+			Permission: permission,
+			Root:       "gpt-3.5-turbo-0125",
+			Parent:     nil,
+		},
+		{
 			Id:         "gpt-3.5-turbo-instruct",
 			Object:     "model",
 			Created:    1677649963,
@@ -244,6 +253,24 @@ func init() {
 			Parent:     nil,
 		},
 		{
+			Id:         "gpt-4-0125-preview",
+			Object:     "model",
+			Created:    1706232090,
+			OwnedBy:    "openai",
+			Permission: permission,
+			Root:       "gpt-4-0125-preview",
+			Parent:     nil,
+		},
+		{
+			Id:         "gpt-4-turbo-preview",
+			Object:     "model",
+			Created:    1706232090,
+			OwnedBy:    "openai",
+			Permission: permission,
+			Root:       "gpt-4-turbo-preview",
+			Parent:     nil,
+		},
+		{
 			Id:         "gpt-4-vision-preview",
 			Object:     "model",
 			Created:    1699593571,
@@ -259,6 +286,24 @@ func init() {
 			OwnedBy:    "openai",
 			Permission: permission,
 			Root:       "text-embedding-ada-002",
+			Parent:     nil,
+		},
+		{
+			Id:         "text-embedding-3-small",
+			Object:     "model",
+			Created:    1706232090,
+			OwnedBy:    "openai",
+			Permission: permission,
+			Root:       "text-embedding-3-small",
+			Parent:     nil,
+		},
+		{
+			Id:         "text-embedding-3-large",
+			Object:     "model",
+			Created:    1706232090,
+			OwnedBy:    "openai",
+			Permission: permission,
+			Root:       "text-embedding-3-large",
 			Parent:     nil,
 		},
 		{
@@ -613,14 +658,14 @@ func RetrieveModel(c *gin.Context) {
 	if model, ok := openAIModelsMap[modelId]; ok {
 		c.JSON(200, model)
 	} else {
-		openAIError := OpenAIError{
+		Error := openai.Error{
 			Message: fmt.Sprintf("The model '%s' does not exist", modelId),
 			Type:    "invalid_request_error",
 			Param:   "model",
 			Code:    "model_not_found",
 		}
 		c.JSON(200, gin.H{
-			"error": openAIError,
+			"error": Error,
 		})
 	}
 }

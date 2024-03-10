@@ -97,7 +97,7 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		util.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
 		return respErr
 	}
-	channelName := c.Query("channel_name")
+	channelName := c.GetString("channel_name")
 	// post-consume quota
 	go postConsumeQuota(ctx, usage, meta, textRequest, ratio, preConsumedQuota, modelRatio, groupRatio, channelName)
 	return nil

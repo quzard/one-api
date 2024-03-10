@@ -15,7 +15,7 @@ export const CHANNEL_OPTIONS = {
     key: 3,
     text: 'Azure OpenAI',
     value: 3,
-    color: 'orange'
+    color: 'secondary'
   },
   11: {
     key: 11,
@@ -27,6 +27,12 @@ export const CHANNEL_OPTIONS = {
     key: 24,
     text: 'Google Gemini',
     value: 24,
+    color: 'orange'
+  },
+  28: {
+    key: 28,
+    text: 'Mistral AI',
+    value: 28,
     color: 'orange'
   },
   15: {
@@ -81,6 +87,12 @@ export const CHANNEL_OPTIONS = {
     key: 27,
     text: 'MiniMax',
     value: 27,
+    color: 'default'
+  },
+  29: {
+    key: 29,
+    text: 'Groq',
+    value: 29,
     color: 'default'
   },
   8: {

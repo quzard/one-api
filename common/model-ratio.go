@@ -7,29 +7,6 @@ import (
 	"time"
 )
 
-var DalleSizeRatios = map[string]map[string]float64{
-	"dall-e-2": {
-		"256x256":   1,
-		"512x512":   1.125,
-		"1024x1024": 1.25,
-	},
-	"dall-e-3": {
-		"1024x1024": 1,
-		"1024x1792": 2,
-		"1792x1024": 2,
-	},
-}
-
-var DalleGenerationImageAmounts = map[string][2]int{
-	"dall-e-2": {1, 10},
-	"dall-e-3": {1, 1}, // OpenAI allows n=1 currently.
-}
-
-var DalleImagePromptLengthLimitations = map[string]int{
-	"dall-e-2": 1000,
-	"dall-e-3": 4000,
-}
-
 const (
 	USD2RMB = 7
 	USD     = 500 // $0.002 = 1 -> $1 = 500
@@ -40,7 +17,6 @@ const (
 // https://platform.openai.com/docs/models/model-endpoint-compatibility
 // https://cloud.baidu.com/doc/WENXINWORKSHOP/s/Blfmc9dlf
 // https://openai.com/pricing
-// TODO: when a new api is enabled, check the pricing here
 // 1 === $0.002 / 1K tokens
 // 1 === ￥0.014 / 1k tokens
 var ModelRatio = map[string]float64{
@@ -87,12 +63,15 @@ var ModelRatio = map[string]float64{
 	"text-search-ada-doc-001": 10,
 	"text-moderation-stable":  0.1,
 	"text-moderation-latest":  0.1,
-	"dall-e-2":                8,     // $0.016 - $0.020 / image
-	"dall-e-3":                20,    // $0.040 - $0.120 / image
-	"claude-instant-1":        0.815, // $1.63 / 1M tokens
-	"claude-2":                5.51,  // $11.02 / 1M tokens
-	"claude-2.0":              5.51,  // $11.02 / 1M tokens
-	"claude-2.1":              5.51,  // $11.02 / 1M tokens
+	"dall-e-2":                8,  // $0.016 - $0.020 / image
+	"dall-e-3":                20, // $0.040 - $0.120 / image
+	// https://www.anthropic.com/api#pricing
+	"claude-instant-1.2":       0.8 / 1000 * USD,
+	"claude-2.0":               8.0 / 1000 * USD,
+	"claude-2.1":               8.0 / 1000 * USD,
+	"claude-3-haiku-20240229":  0.25 / 1000 * USD,
+	"claude-3-sonnet-20240229": 3.0 / 1000 * USD,
+	"claude-3-opus-20240229":   15.0 / 1000 * USD,
 	// https://cloud.baidu.com/doc/WENXINWORKSHOP/s/hlrk4akp7
 	"ERNIE-Bot":         0.8572,     // ￥0.012 / 1k tokens
 	"ERNIE-Bot-turbo":   0.5715,     // ￥0.008 / 1k tokens
@@ -139,14 +118,33 @@ var ModelRatio = map[string]float64{
 	"abab6-chat":    0.1 * RMB,
 	"abab5.5-chat":  0.015 * RMB,
 	"abab5.5s-chat": 0.005 * RMB,
+	// https://docs.mistral.ai/platform/pricing/
+	"open-mistral-7b":       0.25 / 1000 * USD,
+	"open-mixtral-8x7b":     0.7 / 1000 * USD,
+	"mistral-small-latest":  2.0 / 1000 * USD,
+	"mistral-medium-latest": 2.7 / 1000 * USD,
+	"mistral-large-latest":  8.0 / 1000 * USD,
+	"mistral-embed":         0.1 / 1000 * USD,
+	// https://wow.groq.com/
+	"llama2-70b-4096":    0.7 / 1000 * USD,
+	"llama2-7b-2048":     0.1 / 1000 * USD,
+	"mixtral-8x7b-32768": 0.27 / 1000 * USD,
+	"gemma-7b-it":        0.1 / 1000 * USD,
 }
 
+var CompletionRatio = map[string]float64{}
+
 var DefaultModelRatio map[string]float64
+var DefaultCompletionRatio map[string]float64
 
 func init() {
 	DefaultModelRatio = make(map[string]float64)
 	for k, v := range ModelRatio {
 		DefaultModelRatio[k] = v
+	}
+	DefaultCompletionRatio = make(map[string]float64)
+	for k, v := range CompletionRatio {
+		DefaultCompletionRatio[k] = v
 	}
 }
 
@@ -178,8 +176,6 @@ func GetModelRatio(name string) float64 {
 	return ratio
 }
 
-var CompletionRatio = map[string]float64{}
-
 func CompletionRatio2JSONString() string {
 	jsonBytes, err := json.Marshal(CompletionRatio)
 	if err != nil {
@@ -195,6 +191,9 @@ func UpdateCompletionRatioByJSONString(jsonStr string) error {
 
 func GetCompletionRatio(name string) float64 {
 	if ratio, ok := CompletionRatio[name]; ok {
+		return ratio
+	}
+	if ratio, ok := DefaultCompletionRatio[name]; ok {
 		return ratio
 	}
 	if strings.HasPrefix(name, "gpt-3.5") {
@@ -215,7 +214,7 @@ func GetCompletionRatio(name string) float64 {
 				return 2
 			}
 		}
-		return 1.333333
+		return 4.0 / 3.0
 	}
 	if strings.HasPrefix(name, "gpt-4") {
 		if strings.HasSuffix(name, "preview") {
@@ -223,11 +222,18 @@ func GetCompletionRatio(name string) float64 {
 		}
 		return 2
 	}
-	if strings.HasPrefix(name, "claude-instant-1") {
-		return 3.38
+	if strings.HasPrefix(name, "claude-3") {
+		return 5
 	}
-	if strings.HasPrefix(name, "claude-2") {
-		return 2.965517
+	if strings.HasPrefix(name, "claude-") {
+		return 3
+	}
+	if strings.HasPrefix(name, "mistral-") {
+		return 3
+	}
+	switch name {
+	case "llama2-70b-4096":
+		return 0.8 / 0.7
 	}
 	return 1
 }

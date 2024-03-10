@@ -9,6 +9,7 @@ import (
 	"github.com/songquanpeng/one-api/common"
 	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/common/logger"
+	"github.com/songquanpeng/one-api/common/message"
 	"github.com/songquanpeng/one-api/controller"
 	"github.com/songquanpeng/one-api/middleware"
 	"github.com/songquanpeng/one-api/model"
@@ -83,7 +84,11 @@ func main() {
 		logger.SysLog("batch update enabled with interval " + strconv.Itoa(config.BatchUpdateInterval) + "s")
 		model.InitBatchUpdater()
 	}
+	if config.EnableMetric {
+		logger.SysLog("metric enabled, will disable channel if too much request failed")
+	}
 	openai.InitTokenEncoders()
+	_ = message.SendMessage("One API", "", fmt.Sprintf("One API %s started", common.Version))
 
 	// Initialize HTTP server
 	server := gin.New()

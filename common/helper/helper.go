@@ -3,12 +3,10 @@ package helper
 import (
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/songquanpeng/one-api/common/logger"
 	"html/template"
 	"log"
 	"math/rand"
 	"net"
-	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -187,50 +185,16 @@ func GetTimeString() string {
 	return fmt.Sprintf("%s%d", now.Format("20060102150405"), now.UnixNano()%1e9)
 }
 
+func GenRequestID() string {
+	return GetTimeString() + GetRandomNumberString(8)
+}
+
 func Max(a int, b int) int {
 	if a >= b {
 		return a
 	} else {
 		return b
 	}
-}
-
-func GetOrDefaultEnvBool(env string, defaultValue bool) bool {
-	if env == "" || os.Getenv(env) == "" {
-		return defaultValue
-	}
-	return os.Getenv(env) == "true"
-}
-
-func GetOrDefaultEnvInt(env string, defaultValue int) int {
-	if env == "" || os.Getenv(env) == "" {
-		return defaultValue
-	}
-	num, err := strconv.Atoi(os.Getenv(env))
-	if err != nil {
-		logger.SysError(fmt.Sprintf("failed to parse %s: %s, using default value: %d", env, err.Error(), defaultValue))
-		return defaultValue
-	}
-	return num
-}
-
-func GetOrDefaultEnvFloat64(env string, defaultValue float64) float64 {
-	if env == "" || os.Getenv(env) == "" {
-		return defaultValue
-	}
-	num, err := strconv.ParseFloat(os.Getenv(env), 64)
-	if err != nil {
-		logger.SysError(fmt.Sprintf("failed to parse %s: %s, using default value: %f", env, err.Error(), defaultValue))
-		return defaultValue
-	}
-	return num
-}
-
-func GetOrDefaultEnvString(env string, defaultValue string) string {
-	if env == "" || os.Getenv(env) == "" {
-		return defaultValue
-	}
-	return os.Getenv(env)
 }
 
 func AssignOrDefault(value string, defaultValue string) string {

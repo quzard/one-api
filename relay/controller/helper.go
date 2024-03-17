@@ -107,18 +107,18 @@ func getPromptTokens(textRequest *relaymodel.GeneralOpenAIRequest, relayMode int
 	return 0
 }
 
-func getPreConsumedQuota(textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, ratio float64) int {
+func getPreConsumedQuota(textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, ratio float64) int64 {
 	preConsumedTokens := config.PreConsumedQuota
 	if textRequest.MaxTokens != 0 {
-		preConsumedTokens = promptTokens + textRequest.MaxTokens
+		preConsumedTokens = int64(promptTokens) + int64(textRequest.MaxTokens)
 	}
-	return int(float64(preConsumedTokens) * ratio)
+	return int64(float64(preConsumedTokens) * ratio)
 }
 
-func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, ratio float64, meta *util.RelayMeta) (int, *relaymodel.ErrorWithStatusCode) {
+func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, ratio float64, meta *util.RelayMeta) (int64, *relaymodel.ErrorWithStatusCode) {
 	preConsumedQuota := getPreConsumedQuota(textRequest, promptTokens, ratio)
 
-	userQuota, err := model.CacheGetUserQuota(meta.UserId)
+	userQuota, err := model.CacheGetUserQuota(ctx, meta.UserId)
 	if err != nil {
 		return preConsumedQuota, openai.ErrorWrapper(err, "get_user_quota_failed", http.StatusInternalServerError)
 	}
@@ -144,16 +144,16 @@ func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIR
 	return preConsumedQuota, nil
 }
 
-func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *util.RelayMeta, textRequest *relaymodel.GeneralOpenAIRequest, ratio float64, preConsumedQuota int, modelRatio float64, groupRatio float64, channelName string) {
+func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *util.RelayMeta, textRequest *relaymodel.GeneralOpenAIRequest, ratio float64, preConsumedQuota int64, modelRatio float64, groupRatio float64, channelName string) {
 	if usage == nil {
 		logger.Error(ctx, "usage is nil, which is unexpected")
 		return
 	}
-	quota := 0
+	var quota int64
 	completionRatio := common.GetCompletionRatio(textRequest.Model)
 	promptTokens := usage.PromptTokens
 	completionTokens := usage.CompletionTokens
-	quota = int(math.Ceil((float64(promptTokens) + float64(completionTokens)*completionRatio) * ratio))
+	quota = int64(math.Ceil((float64(promptTokens) + float64(completionTokens)*completionRatio) * ratio))
 	if ratio != 0 && quota <= 0 {
 		quota = 1
 	}
@@ -168,14 +168,12 @@ func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *util.R
 	if err != nil {
 		logger.Error(ctx, "error consuming token remain quota: "+err.Error())
 	}
-	err = model.CacheUpdateUserQuota(meta.UserId)
+	err = model.CacheUpdateUserQuota(ctx, meta.UserId)
 	if err != nil {
 		logger.Error(ctx, "error update user quota cache: "+err.Error())
 	}
-	if quota != 0 {
-		logContent := fmt.Sprintf("模型倍率 %.2f，分组倍率 %.2f，补全倍率 %.2f", modelRatio, groupRatio, completionRatio)
-		model.RecordConsumeLog(ctx, meta.UserId, meta.ChannelId, promptTokens, completionTokens, textRequest.Model, meta.TokenName, quota, logContent, channelName)
-		model.UpdateUserUsedQuotaAndRequestCount(meta.UserId, quota)
-		model.UpdateChannelUsedQuota(meta.ChannelId, quota)
-	}
+	logContent := fmt.Sprintf("模型倍率 %.2f，分组倍率 %.2f，补全倍率 %.2f", modelRatio, groupRatio, completionRatio)
+	model.RecordConsumeLog(ctx, meta.UserId, meta.ChannelId, promptTokens, completionTokens, textRequest.Model, meta.TokenName, quota, logContent, channelName)
+	model.UpdateUserUsedQuotaAndRequestCount(meta.UserId, quota)
+	model.UpdateChannelUsedQuota(meta.ChannelId, quota)
 }

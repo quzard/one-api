@@ -35,6 +35,11 @@ const (
 	LingYiWanWu
 	StepFun
 	AwsClaude
+	Coze
+	Cohere
+	DeepSeek
+	Cloudflare
+	DeepL
 
 	Dummy
 )

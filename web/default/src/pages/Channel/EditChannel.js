@@ -58,7 +58,8 @@ const EditChannel = () => {
   const [config, setConfig] = useState({
     region: '',
     sk: '',
-    ak: ''
+    ak: '',
+    user_id: ''
   });
   const handleInputChange = (e, { name, value }) => {
     if (name === "used_quota") {
@@ -96,7 +97,9 @@ const EditChannel = () => {
         data.model_mapping = JSON.stringify(JSON.parse(data.model_mapping), null, 2);
       }
       setInputs(data);
-      setConfig(JSON.parse(data.config));
+      if (data.config !== '') {
+        setConfig(JSON.parse(data.config));
+      }
       setBasicModels(getChannelModels(data.type));
     } else {
       showError(message);
@@ -158,13 +161,11 @@ const EditChannel = () => {
   }, []);
 
   const submit = async () => {
-    // some provider as AWS need both AK and SK rather than a single key,
-    // so we need to combine them into a single key to achieve the best compatibility.
-    if (inputs.ak && inputs.sk) {
-      console.log(`combine ak ${inputs.ak} and sk ${inputs.sk}`, inputs.ak, inputs.sk);
-      inputs.key = `${inputs.ak}\n${inputs.sk}`;
+    if (inputs.key === '') {
+      if (config.ak !== '' && config.sk !== '' && config.region !== '') {
+        inputs.key = `${config.ak}|${config.sk}|${config.region}`;
+      }
     }
-
     if (!isEdit && (inputs.name === '' || inputs.key === '')) {
       showInfo('请填写渠道名称和渠道密钥！');
       return;
@@ -177,7 +178,7 @@ const EditChannel = () => {
       showInfo('模型映射必须是合法的 JSON 格式！');
       return;
     }
-    let localInputs = inputs;
+    let localInputs = {...inputs};
     if (localInputs.base_url && localInputs.base_url.endsWith('/')) {
       localInputs.base_url = localInputs.base_url.slice(0, localInputs.base_url.length - 1);
     }
@@ -373,6 +374,13 @@ const EditChannel = () => {
               </Form.Field>
             )
           }
+          {
+            inputs.type === 34 && (
+              <Message>
+                对于 Coze 而言，模型名称即 Bot ID，你可以添加一个前缀 `bot-`，例如：`bot-123456`。
+              </Message>
+            )
+          }
           <Form.Field>
             <Form.Dropdown
               label='模型'
@@ -464,6 +472,18 @@ const EditChannel = () => {
             )
           }
           {
+            inputs.type === 34 && (
+              <Form.Input
+                label='User ID'
+                name='user_id'
+                required
+                placeholder={'生成该密钥的用户 ID'}
+                onChange={handleConfigChange}
+                value={config.user_id}
+                autoComplete=''
+              />)
+          }
+          {
             inputs.type !== 33 && (batch ? <Form.Field>
               <Form.TextArea
                 label='密钥'
@@ -486,6 +506,21 @@ const EditChannel = () => {
                 autoComplete='new-password'
               />
             </Form.Field>)
+          }
+          {
+            inputs.type === 37 && (
+              <Form.Field>
+                <Form.Input
+                  label='Account ID'
+                  name='user_id'
+                  required
+                  placeholder={'请输入 Account ID，例如：d8d7c61dbc334c32d3ced580e4bf42b4'}
+                  onChange={handleConfigChange}
+                  value={config.user_id}
+                  autoComplete=''
+                />
+              </Form.Field>
+            )
           }
           {
             inputs.type !== 33 && !isEdit && (

@@ -5,13 +5,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/common/ctxkey"
 	"io"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/gin-gonic/gin"
@@ -23,18 +21,6 @@ import (
 	"github.com/songquanpeng/one-api/relay/adaptor/anthropic"
 	relaymodel "github.com/songquanpeng/one-api/relay/model"
 )
-
-func newAwsClient(c *gin.Context) (*bedrockruntime.Client, error) {
-	ak := c.GetString(config.KeyAK)
-	sk := c.GetString(config.KeySK)
-	region := c.GetString(config.KeyRegion)
-	client := bedrockruntime.New(bedrockruntime.Options{
-		Region:      region,
-		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(ak, sk, "")),
-	})
-
-	return client, nil
-}
 
 func wrapErr(err error) *relaymodel.ErrorWithStatusCode {
 	return &relaymodel.ErrorWithStatusCode{
@@ -63,12 +49,7 @@ func awsModelID(requestModel string) (string, error) {
 	return "", errors.Errorf("model %s not found", requestModel)
 }
 
-func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName string) (*relaymodel.ErrorWithStatusCode, *relaymodel.Usage) {
-	awsCli, err := newAwsClient(c)
-	if err != nil {
-		return wrapErr(errors.Wrap(err, "newAwsClient")), nil
-	}
-
+func Handler(c *gin.Context, awsCli *bedrockruntime.Client, modelName string) (*relaymodel.ErrorWithStatusCode, *relaymodel.Usage) {
 	awsModelId, err := awsModelID(c.GetString(ctxkey.RequestModel))
 	if err != nil {
 		return wrapErr(errors.Wrap(err, "awsModelID")), nil
@@ -121,13 +102,8 @@ func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName st
 	return nil, &usage
 }
 
-func StreamHandler(c *gin.Context, resp *http.Response) (*relaymodel.ErrorWithStatusCode, *relaymodel.Usage) {
+func StreamHandler(c *gin.Context, awsCli *bedrockruntime.Client) (*relaymodel.ErrorWithStatusCode, *relaymodel.Usage) {
 	createdTime := helper.GetTimestamp()
-	awsCli, err := newAwsClient(c)
-	if err != nil {
-		return wrapErr(errors.Wrap(err, "newAwsClient")), nil
-	}
-
 	awsModelId, err := awsModelID(c.GetString(ctxkey.RequestModel))
 	if err != nil {
 		return wrapErr(errors.Wrap(err, "awsModelID")), nil

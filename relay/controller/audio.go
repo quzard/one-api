@@ -37,7 +37,7 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	userId := c.GetInt(ctxkey.Id)
 	group := c.GetString(ctxkey.Group)
 	tokenName := c.GetString(ctxkey.TokenName)
-	channelName := c.GetString("channel_name")
+	channelName := c.GetString(ctxkey.ChannelName)
 
 	var ttsRequest openai.TextToSpeechRequest
 	if relayMode == relaymode.AudioSpeech {

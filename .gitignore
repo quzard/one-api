@@ -10,3 +10,4 @@ data
 **/.DS_Store
 /web/node_modules
 cmd.md
+.env

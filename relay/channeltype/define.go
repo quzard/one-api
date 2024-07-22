@@ -42,5 +42,8 @@ const (
 	DeepL
 	TogetherAI
 	Doubao
+	Novita
+	VertextAI
+	Proxy
 	Dummy
 )

@@ -347,7 +347,7 @@ const ChannelsTable = () => {
   };
 
   const renderModels = (modelString) => {
-    let models = modelString;
+    let models = Array.isArray(modelString) ? modelString : modelString.split(",");
     return models.map((model) => (
         <Label>
           {model}

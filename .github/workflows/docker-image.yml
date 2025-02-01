@@ -1,14 +1,10 @@
 name: Publish Docker image
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
-    inputs:
-      name:
-        description: 'reason'
-        required: false
+  push:
+    branches: [main]
+
 jobs:
   push_to_registries:
     name: Push Docker image to multiple registries
@@ -29,7 +25,7 @@ jobs:
 
       - name: Save version info
         run: |
-          git describe --tags > VERSION 
+          echo "test" > VERSION 
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -55,7 +51,7 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            justsong/one-api
+            ${{ secrets.DOCKERHUB_USERNAME }}/one-api
             ghcr.io/${{ github.repository }}
 
       - name: Build and push Docker images
